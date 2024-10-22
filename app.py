@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def hello_world():
-    print(">>> Hello, World! 1" )  # In ra màn hình console
+    print(">>> Hello, World! 1")  # In ra màn hình console
     return ">>> Hello, World! 2"  # Trả về chuỗi "Hello, World!" khi truy cập trang web
 
 
