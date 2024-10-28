@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+service ChatService {
+  rpc GetOnlineUsers (Empty) returns (UserList);
+  rpc SendMessage (ChatMessage) returns (Ack);
+}
+
+message Empty {}
+
+message User {
+  string username = 1;
+  bool online = 2;
+}
+
+message UserList {
+  repeated User users = 1;
+}
+
+message ChatMessage {
+  string sender = 1;
+  string receiver = 2;
+  string message = 3;
+}
+
+message Ack {
+  bool success = 1;
+}

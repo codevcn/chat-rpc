@@ -4,3 +4,6 @@ Flask==3.0.3
 black==24.10.0
 flake8==7.1.1
 pre-commit==4.0.1
+websockets==13.1
+protobuf==5.28.3
+pillow==11.0.0
