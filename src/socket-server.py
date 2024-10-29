@@ -1,34 +1,34 @@
 # websocket_server.py
 import asyncio
 import websockets
-from websockets import WebSocketServerProtocol
+from websockets import WebSocketServerProtocol, Data
 
 connected_clients = set[WebSocketServerProtocol]()
 
 
-async def broadcast_all(msg):
+async def broadcast_all(msg: Data):
     """truyền đến tất cả mọi người"""
     for client in connected_clients:
         await client.send(msg)
 
 
-async def broadcast(websocket: WebSocketServerProtocol, msg):
+async def broadcast(websocket: WebSocketServerProtocol, data: Data):
     """truyền đến tất cả mọi người trừ người gửi"""
     for client in connected_clients:
         if client != websocket:
-            await client.send(msg)
+            await client.send(data)
 
 
-async def emit_back(websocket: WebSocketServerProtocol, msg):
+async def emit_back(websocket: WebSocketServerProtocol, data: Data):
     """truyền ngược lại người gửi"""
-    await websocket.send(msg)
+    await websocket.send(data)
 
 
 async def chatting_ns_handler(websocket: WebSocketServerProtocol):
     try:
-        async for message in websocket:
+        async for data in websocket:
             # Phát tin nhắn tới tất cả client đã kết nối
-            await broadcast(websocket, msg=message)
+            await broadcast(websocket, data=data)
     finally:
         # Xóa client khi ngắt kết nối
         connected_clients.remove(websocket)

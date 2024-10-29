@@ -5,15 +5,20 @@ import websockets
 import threading
 from tkinter import messagebox
 from utils import create_label_image, ScrollableFrame
+import json
 
 # styling
+regular_font_xsm_bold = ("Arial", 10, "bold")
 regular_font_sm = ("Arial", 12)
 regular_font_sm_bold = ("Arial", 12, "bold")
-default_user_avt_path = "./resources/imgs/user-logo.png"
+regular_font_empty = ("Arial", 15, "bold")
+default_user_avt_path = "./resources/imgs/user-avt.png"
+default_guest_avt_path = "./resources/imgs/guest-avt.png"
 
 
-class ChatRoom:
+class ChatRoomScreen:
     msg_user_avts_sharing: list = []
+    empty_msg_flag: bool = True
 
     def __init__(self, root: tk.Tk, username: str) -> None:
         self.root = root
@@ -22,6 +27,9 @@ class ChatRoom:
         # Tạo frame
         self.root_frame = tk.Frame(self.root)
         self.root_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Regular var
+        reg_color = "white"
 
         # Tạo avatar
         self.avt_frame = tk.Frame(self.root_frame)
@@ -35,18 +43,29 @@ class ChatRoom:
         self.user_info.pack(side="left", padx=(10, 0))
 
         # Tạo messages list
-        self.msg_list = ScrollableFrame(self.root_frame, height=50)
-        self.msg_list.pack(fill="x", padx=(10, 10))
+        self.msg_list = ScrollableFrame(self.root_frame, pady=5, padx=5)
+        self.msg_list.pack(fill="both", expand=True)
+
+        # Empty messages
+        self.empty_msg = tk.Label(
+            self.msg_list.main_frame,
+            bg=reg_color,
+            text="Empty...",
+            font=regular_font_empty,
+            fg="gray",
+        )
+        self.empty_msg.pack(expand=True, anchor="center")
 
         # Tạo frame nhập tin nhắn
         self.msg_entry_frame = tk.Frame(self.root_frame)
-        self.msg_entry_frame.pack(pady=(10, 10), fill="x")
+        self.msg_entry_frame.pack(pady=(10, 10), fill="x", side="bottom")
         # Tạo thanh input
         self.msg_entry = tk.Entry(
             self.msg_entry_frame, borderwidth=0.5, relief="solid", font=regular_font_sm
         )
         self.msg_entry.pack(fill="both", side="left", expand=True)
         self.msg_entry.bind("<Return>", lambda e: self.send_message())
+        self.msg_entry.focus()
         # Tạo nút gửi tin nhắn
         self.send_button = tk.Button(
             self.msg_entry_frame,
@@ -84,44 +103,85 @@ class ChatRoom:
     async def receive_messages(self):
         while not self.stop_event.is_set():
             try:
-                message = await self.websocket.recv()
-                self.show_message(message, False)
+                data = await self.websocket.recv()
+                res_data = json.loads(data)
+                self.show_message(
+                    res_data["message"],
+                    res_data["username"],
+                )
             except websockets.ConnectionClosed:
                 break
 
-    def show_message(self, message, myself: bool):
+    def show_message(self, message: str, username: str):
         # Hiển thị tin nhắn trên giao diện Tkinter
-        msg_frame = tk.Frame(self.msg_list, bg="white")
+        myself = username == self.username
+
+        if self.empty_msg_flag:
+            self.empty_msg.destroy()
+            self.empty_msg_flag = False
+
+        msg_frame = tk.Frame(self.msg_list.main_frame, bg="white")
         msg_frame.pack(fill="x", pady=(0, 10))
         self.msg_user_avts_sharing.append(
-            create_label_image(default_user_avt_path, height=25, width=25)
+            create_label_image(
+                default_user_avt_path if myself else default_guest_avt_path,
+                height=25,
+                width=25,
+            )
         )
         msg_user_avt = tk.Label(
             msg_frame,
             image=self.msg_user_avts_sharing[len(self.msg_user_avts_sharing) - 1],
             bg="white",
         )
+        reg_color = "#b5faff"
+        wrapper = tk.Frame(msg_frame, bg=reg_color)
+        msg_text_frame = tk.Frame(wrapper, bg=reg_color)
+        msg_text_frame.pack(padx=5, pady=(0, 5), fill="x")
+        msg_username = tk.Label(
+            msg_text_frame,
+            text=username,
+            borderwidth=0,
+            font=regular_font_xsm_bold,
+            bg=reg_color,
+            fg="brown",
+        )
+        msg_username.pack(pady=(0, 5))
         msg_text = tk.Label(
-            msg_frame,
+            msg_text_frame,
             text=message,
             borderwidth=0,
-            bg="black",
-            fg="white",
             font=regular_font_sm,
+            bg=reg_color,
         )
+        msg_text.pack()
         if myself:
-            msg_user_avt.pack(side="right")
-            msg_text.pack(side="right", padx=(0, 5))
-            msg_text.config(bg="lightgray", fg="black")
+            msg_user_avt.pack(side="right", anchor="n")
+            wrapper.pack(side="right", padx=(0, 5))
+            msg_username.pack(pady=(0, 5), anchor="e")
         else:
-            msg_user_avt.pack(side="left")
-            msg_text.pack(side="left", padx=(5, 0))
+            reg_color = "#b5ffde"
+            msg_user_avt.pack(side="left", anchor="n")
+            wrapper.pack(side="left", padx=(5, 0))
+            wrapper.config(bg=reg_color)
+            msg_text_frame.config(bg=reg_color)
+            msg_username.pack(anchor="w")
+            msg_username.config(bg=reg_color)
+            msg_text.config(bg=reg_color)
+
+    def validate_message_before_send(self, message: str):
+        if len(message) == 0:
+            messagebox.showerror("Message is empty", "Please enter your message!")
+            return False
+        return True
 
     def send_message(self):
-        message = self.msg_entry.get()
-        if message:
-            asyncio.run_coroutine_threadsafe(self.websocket.send(message), self.loop)
-            self.show_message(message, True)
+        data = {"message": self.msg_entry.get(), "username": self.username}
+        if self.validate_message_before_send(data["message"]):
+            asyncio.run_coroutine_threadsafe(
+                self.websocket.send(json.dumps(data)), self.loop
+            )
+            self.show_message(data["message"], data["username"])
             self.msg_entry.delete(0, tk.END)
 
     async def close_connection(self):
@@ -140,22 +200,28 @@ class ChatRoom:
         self.root.destroy()
 
 
-class Auth:
+class AuthScreen:
+    min_len_username: int = 2
+    max_len_username: int = 20
+
     def __init__(self, root: tk.Tk, show_chat_room_window):
         self.root = root
         self.show_chat_room_window = show_chat_room_window
 
         # Tạo frame
-        self.frame = tk.Frame(self.root)
-        self.frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.root_frame = tk.Frame(self.root)
+        self.root_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
+        # Frame nhập username
+        self.username_frame = tk.Frame(self.root_frame)
+        self.username_frame.pack(expand=True)
         # Label hướng dẫn
-        self.label = tk.Label(self.frame, text="Enter your username:")
+        self.label = tk.Label(self.username_frame, text="Enter your username:")
         self.label.pack(pady=10)
 
         # Entry để nhập username
         self.username_entry = tk.Entry(
-            self.frame,
+            self.username_frame,
             width=30,
             borderwidth=0.5,
             font=regular_font_sm,
@@ -163,10 +229,11 @@ class Auth:
         )
         self.username_entry.pack(pady=5, fill="x")
         self.username_entry.bind("<Return>", lambda e: self.confirm_username())
+        self.username_entry.focus()
 
         # Button xác nhận username
         self.confirm_button = tk.Button(
-            self.frame,
+            self.username_frame,
             text="Confirm",
             command=self.confirm_username,
             relief="solid",
@@ -184,7 +251,7 @@ class Auth:
 
     def confirm_username(self):
         username = self.username_entry.get().strip()
-        if 1 <= len(username) <= 20:
+        if self.min_len_username <= len(username) <= self.max_len_username:
             # Gọi callback để chuyển sang giao diện chat nếu username hợp lệ
             self.show_chat_room_window(username)
         else:
@@ -195,7 +262,7 @@ class Auth:
     def destroy(self):
         # Xóa các widget của cửa sổ nhập username
         self.label.destroy()
-        self.frame.destroy()
+        self.root_frame.destroy()
         self.username_entry.destroy()
         self.confirm_button.destroy()
 
@@ -214,14 +281,14 @@ class RootLayout:
         self.root.mainloop()
 
     def show_username_window(self):
-        self.auth_window = Auth(self.root, self.show_chat_room_window)
+        self.auth_window = AuthScreen(self.root, self.show_chat_room_window)
 
     def show_chat_room_window(self, username):
         # Xóa cửa sổ nhập username
         self.auth_window.destroy()
 
         # Tạo cửa sổ phòng chat khi username hợp lệ
-        self.chat_room_window = ChatRoom(self.root, username)
+        self.chat_room_window = ChatRoomScreen(self.root, username)
 
 
 # Khởi tạo giao diện Tkinter và chạy client
