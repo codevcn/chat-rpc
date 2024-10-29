@@ -95,7 +95,7 @@ class ChatRoomScreen:
         host_address: str = "192.168.1.10"
         socket_server_port: int = 8000
         chatting_ns: str = "chatting"
-        uri = f"ws://{host_address}:{socket_server_port}/{chatting_ns}"
+        uri = f"ws://{host_address}:{socket_server_port}/{chatting_ns}?username={self.username}"
         self.websocket = await websockets.connect(uri)
         print(">>> connected to ws server")
         await self.receive_messages()

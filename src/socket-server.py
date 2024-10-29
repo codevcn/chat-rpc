@@ -2,21 +2,41 @@
 import asyncio
 import websockets
 from websockets import WebSocketServerProtocol, Data
+from urllib.parse import urlparse, parse_qs
 
-connected_clients = set[WebSocketServerProtocol]()
+
+class ConnectedClient:
+    def __init__(self, client_socket: WebSocketServerProtocol, username: str):
+        self.client_socket = client_socket
+        self.username = username
+
+
+connected_clients = set[ConnectedClient]()
+
+
+def check_username(username: str):
+    for client in connected_clients:
+        if client.username == username:
+            return False
+    return True
+
+
+def extract_username_in_path(path: str):
+    username = parse_qs(urlparse(path).query)["username"]
+    return username[0] if username else None
 
 
 async def broadcast_all(msg: Data):
     """truyền đến tất cả mọi người"""
     for client in connected_clients:
-        await client.send(msg)
+        await client.client_socket.send(msg)
 
 
 async def broadcast(websocket: WebSocketServerProtocol, data: Data):
     """truyền đến tất cả mọi người trừ người gửi"""
     for client in connected_clients:
         if client != websocket:
-            await client.send(data)
+            await client.client_socket.send(data)
 
 
 async def emit_back(websocket: WebSocketServerProtocol, data: Data):
@@ -38,7 +58,8 @@ async def handle_client(websocket: WebSocketServerProtocol, path: str):
     print(">>> connected client:", websocket.id, "-", path)
 
     # Thêm client vào danh sách các client đã kết nối
-    connected_clients.add(websocket)
+    username = extract_username_in_path(path)
+    connected_clients.add(ConnectedClient(websocket, username))
 
     # Xử lý các namespace
     match path:
